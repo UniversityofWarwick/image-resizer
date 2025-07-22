@@ -4,7 +4,7 @@
   "description": "Web wrapper for Sharp",
   "main": "server.mjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "author": "",
   "dependencies": {
@@ -12,5 +12,9 @@
     "koa": "3.0.0",
     "sharp": "0.34.2",
     "winston": "3.17.0"
+  },
+  "devDependencies": {
+    "chai": "5.2.1",
+    "mocha": "11.7.1"
   }
 }

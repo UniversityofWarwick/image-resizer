@@ -1,28 +1,16 @@
-import http2 from 'node:http2';
 import fs from 'node:fs';
 
 import Koa from 'koa';
 import Router from '@koa/router';
 import sharp from 'sharp';
-import winston from 'winston';
+import logger from './logging.mjs';
+
+import * as service from './service.mjs';
 
 const app = new Koa();
 const router = new Router();
 
-const logger = winston.createLogger({
-  level: 'debug',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format((info) => {
-      info.type = info.type || 'application';
-      return info;
-    })(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console()
-  ]
-});
+const DEFAULT_WIDTH = process.env.TARGET_DEFAULT_WIDTH || 1280;
 
 // Access logger helper
 const accessLogger = {
@@ -31,8 +19,14 @@ const accessLogger = {
   error: (msg, meta = {}) => logger.error(msg, { ...meta, type: 'access' })
 };
 
-const QUALITY = process.env.TARGET_QUALITY || 80;
-const DEFAULT_WIDTH = process.env.TARGET_DEFAULT_WIDTH || 1280;
+function parseBoolean(value) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true' || value === '1';
+  }
+  return Boolean(value);
+}
 
 /**
  * Resize an image to a specified maximum width and convert it to the specified format.
@@ -41,50 +35,23 @@ const DEFAULT_WIDTH = process.env.TARGET_DEFAULT_WIDTH || 1280;
  * If the target format is 'copy', it will keep the input format.
  */
 function conversionHandler(targetFormat) {
+  /**
+   * @param {Koa.Context} ctx The Koa context object.
+   */
   return async function (ctx) {
     const req = ctx.req;
     const res = ctx.res;
     const width = parseInt(ctx.query.width, 10) || DEFAULT_WIDTH;
     const height = parseInt(ctx.query.height, 10) || null;
+    const lossless = parseBoolean(ctx.query.lossless); // can be undefined
     logger.debug(`Received request to resize image to ${targetFormat} format, width: ${width}`);
-    const lossless = false; // No need for lossless yet.
 
-    let image = sharp().autoOrient();
-    const stream = req.pipe(image);
-    const metadata = await image.metadata();
-
-    logger.debug(`Image info: width=${metadata.width}, height=${metadata.height}, format=${metadata.format}`);
-    let needsResize = width < metadata.width || (height && height < metadata.height);
-    let needsConversion = targetFormat !== 'copy' && metadata.format !== targetFormat;
-    const resolvedFormat = targetFormat === 'copy' ? metadata.format : targetFormat;
-    ctx.set('Content-Type', `image/${resolvedFormat}`);
-
-    let actions = [];
-    if ((metadata.orientation ?? 1) !== 1) {
-      actions.push('orient');
-    }
-    if (needsResize) {
-      image = image.resize({ width, height, fit: 'inside', withoutEnlargement: true });
-      actions.push('scale:down');
-    }
-    if (needsConversion) {
-      switch (targetFormat) {
-        case 'avif':
-          image = image.avif({ lossless, quality: lossless ? undefined : QUALITY });
-          break;
-        case 'webp':
-          image = image.webp({ lossless, quality: lossless ? undefined : QUALITY });
-          break;
-        default:
-          logger.error(`Unsupported target format: ${targetFormat}`);
-          ctx.status = 500;
-          ctx.body = `Unsupported target format: ${targetFormat}`;
-          return;
-      }
-      actions.push(`convert:${targetFormat}`)
-    }
+    const { contentType, actions, stream, lossless: outputLossless } = await service.resize(req, {
+      width, height, targetFormat, lossless
+    });
+    ctx.set('Content-Type', contentType);
     ctx.set('X-Result-Actions', actions.join(', '));
-
+    ctx.set('X-Result-Lossless', outputLossless);
     ctx.body = stream
       .on('error', err => {
         logger.error('Processing error:', err);
@@ -94,12 +61,42 @@ function conversionHandler(targetFormat) {
       .on('end', () => {
         logger.debug('Complete');
       });
+
   }
 }
 
 router.post('/resize/webp', conversionHandler('webp'));
 router.post('/resize/avif', conversionHandler('avif'));
 router.post('/resize', conversionHandler('copy'));
+
+router.post('/metadata', async (ctx) => {
+  const req = ctx.req;
+  const res = ctx.res;
+  const includeStats = ctx.query.stats === 'true';
+  // read request body as a stream and pipe it to sharp
+  const image = sharp().autoOrient();
+  const stream = req.pipe(image);
+  try {
+    const metadata = await image.metadata();
+    const stats = includeStats ? image.stats() : null;
+    ctx.body = {
+      width: metadata.width,
+      height: metadata.height,
+      format: metadata.format,
+      orientation: metadata.orientation,
+      hasAlpha: metadata.hasAlpha
+    };
+    if (includeStats) {
+      ctx.body.stats = await stats;
+    }
+    ctx.set('Content-Type', 'application/json');
+  }
+  catch (err) {
+    logger.error('Metadata extraction error:', err);
+    ctx.status = 500;
+    ctx.body = 'Failed to extract metadata';
+  }
+});
 
 router.get('/', (ctx) => {
   ctx.body = [
@@ -127,20 +124,7 @@ app
   .use(router.routes())
   .use(router.allowedMethods());
 
-const server = http2.createSecureServer({
-  key: fs.readFileSync('tls/key.pem'),
-  cert: fs.readFileSync('tls/cert.pem')
-}, app.callback());
-
-// Handle TLS socket errors, otherwise the whole
-// server can crash from a single client TLS error.
-server.on('secureConnection', (tlsSocket) => {
-  tlsSocket.on('error', (err) => {
-    logger.warn('TLS socket error:', err.message)
-  })
-});
-
 const PORT = process.env.PORT ?? 3000;
-server.listen(PORT, () => {
-  logger.info(`Sharp API (HTTP/2) listening on https://localhost:${PORT}`);
+app.listen(PORT, () => {
+  logger.info(`Sharp API listening on http://localhost:${PORT}`);
 });
