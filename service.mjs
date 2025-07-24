@@ -24,7 +24,7 @@ export async function resize(stream, options) {
   const calculatedLossless = (lossless !== undefined) ? lossless : !(await isLossyPreferred(image));
 
   logger.debug(`Image info: width=${metadata.width}, height=${metadata.height}, format=${metadata.format}`);
-  let needsResize = width < metadata.width || (height && height < metadata.height);
+  let needsResize = (width && width < metadata.width) || (height && height < metadata.height);
   let needsConversion = targetFormat !== 'copy' && metadata.format !== targetFormat;
   const resolvedFormat = targetFormat === 'copy' ? metadata.format : targetFormat;
 
@@ -61,7 +61,6 @@ export async function resize(stream, options) {
 
 async function isLossyPreferred(sharpInstance) {
   const results = await analyzeImage(sharpInstance);
-  logger.info(`Image analysis results: ${JSON.stringify(results)}`);
   return results.lossyPreferred;
 }
 
@@ -72,7 +71,7 @@ async function isLossyPreferred(sharpInstance) {
  * graphics or screenshots.
  *
  * @param {sharp.Sharp} sharpInstance An instance of a sharp image.
- * @returns {Promise<{isPhoto: boolean, stats: {isOpaque: boolean, entropy: number, standardDeviation: number}} | {isPhoto: boolean, stats: {error: string}}>}
+ * @returns {Promise<{lossyPreferred: boolean, stats: {isOpaque: boolean, entropy: number, standardDeviation: number}} | {lossyPreferred: boolean, stats: {error: string}}>}
  */
 export async function analyzeImage(sharpInstance) {
   // Thresholds can be adjusted based on your specific image set
@@ -104,7 +103,7 @@ export async function analyzeImage(sharpInstance) {
   } catch (error) {
     console.error('Failed to analyze image stats:', error);
     return {
-      isPhoto: true, // Default to true on error
+      lossyPreferred: true, // Default to true on error
       stats: {
         error: error.message
       },

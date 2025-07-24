@@ -7,10 +7,15 @@ import logger from './logging.mjs';
 
 import * as service from './service.mjs';
 
-const app = new Koa();
+/*
+ * This module creates the Koa instance an imports it but does not start a server.
+ * The server is started in index.mjs to allow for easier testing.
+ */
+
+export const app = new Koa();
 const router = new Router();
 
-const DEFAULT_WIDTH = process.env.TARGET_DEFAULT_WIDTH || 1280;
+const DEFAULT_WIDTH = process.env.TARGET_DEFAULT_WIDTH || 0;
 
 // Access logger helper
 const accessLogger = {
@@ -123,8 +128,3 @@ app.use(async (ctx, next) => {
 app
   .use(router.routes())
   .use(router.allowedMethods());
-
-const PORT = process.env.PORT ?? 3000;
-app.listen(PORT, () => {
-  logger.info(`Sharp API listening on http://localhost:${PORT}`);
-});
