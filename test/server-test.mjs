@@ -23,6 +23,14 @@ describe('Resizing API', function() {
   });
 
   it('should resize an image to WebP format', async function() {
+    /*
+      Read the image file into a memory buffer.
+      It would be good to use a readable stream here to demonstrate the streaming,
+      but that would require a client that was capable of reading the response
+      stream at the same time as sending the request body, which supertest does not support.
+
+      So we read the file into a buffer and send it in one go.
+    */
     const imageBuffer = await fs.readFile('./test/images/goose (lossy).png');
     await request(app.callback())
       .post('/resize/webp')
