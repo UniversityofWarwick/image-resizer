@@ -13,4 +13,4 @@ EXPOSE 3000
 # to avoid running as root.
 USER node
 
-CMD ["node", "server.mjs"]
+CMD ["node", "index.mjs"]
