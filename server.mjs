@@ -7,6 +7,8 @@ import logger from './logging.mjs';
 
 import * as service from './service.mjs';
 
+import packageJson from './package.json' with { type: 'json' };
+
 /*
  * This module creates the Koa instance an imports it but does not start a server.
  * The server is started in index.mjs to allow for easier testing.
@@ -104,12 +106,21 @@ router.post('/metadata', async (ctx) => {
 });
 
 router.get('/', (ctx) => {
-  ctx.body = [
-    'POST to /resize/[webp|avif] to convert to WebP or AVIF.',
-    'POST to /resize to resize keeping the original format.',
-    'Query parameter "width" can be used to specify the maximum width.',
-    'Any EXIF transformations will be baked in to the output.'
-  ].join('\n');
+  ctx.body = {
+    message: 'Welcome to the Image Processing API',
+    version: packageJson.version,
+    endpoints: {
+      'POST /metadata': 'Extract metadata from an image.',
+      'POST /resize/[webp|avif]?[width=<width>][height=<height>][lossless=<true|false>]': 'Convert to WebP or AVIF.',
+      'POST /resize': 'Resize keeping the original format.'
+    }
+  };
+  // [
+  //   'POST to /resize/[webp|avif] to convert to WebP or AVIF.',
+  //   'POST to /resize to resize keeping the original format.',
+  //   'Query parameter "width" can be used to specify the maximum width.',
+  //   'Any EXIF transformations will be baked in to the output.'
+  // ].join('\n');
 });
 
 // Access logging middleware
