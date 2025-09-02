@@ -36,7 +36,9 @@ export async function resize(stream, options) {
     actions.push('orient');
   }
   if (needsResize) {
-    image = image.resize({ width, height, fit: 'inside', withoutEnlargement: true });
+    const w = width && width > 0 ? width : undefined;
+    const h = height && height > 0 ? height : undefined;
+    image = image.resize({ width: w, height: h, fit: 'inside', withoutEnlargement: true });
     actions.push('scale:down');
   }
   if (needsConversion) {
@@ -92,6 +94,8 @@ export async function analyzeImage(sharpInstance) {
     const standardDeviation = channels[0].stdev;
 
     // Determine if the image is a photograph
+    // TODO occasionally photographic imagery is combined with transparency.
+    // May need to revisit the isOpaque logic here.
     const lossyPreferred = alreadyLossy || (isOpaque && entropy > PHOTO_ENTROPY_THRESHOLD);
 
     return {
