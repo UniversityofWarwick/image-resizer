@@ -16,7 +16,10 @@ const QUALITY = process.env.TARGET_QUALITY || 80;
 export async function resize(stream, options) {
   const { width, height, targetFormat, lossless } = options;
 
-  let image = sharp().autoOrient();
+  // "animated" will read all frames so that GIF files are encoded to animated output
+  // (where supported, which it is in WebP). For other inputs that are only a single image,
+  // it has no effect.
+  let image = sharp({ animated: true }).autoOrient();
   const output = stream.pipe(image);
   const metadata = await image.metadata();
 
