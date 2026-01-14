@@ -18,8 +18,9 @@ export async function resize(stream, options) {
 
   // "animated" will read all frames so that GIF files are encoded to animated output
   // (where supported, which it is in WebP). For other inputs that are only a single image,
-  // it has no effect.
-  let image = sharp({ animated: true }).autoOrient();
+  // it has no effect. failOn: 'error' allows certain _mildly_ corrupt images to be
+  // processed rather than sharp failing outright.
+  let image = sharp({ animated: true, failOn: 'error' }).autoOrient();
   const output = stream.pipe(image);
   const metadata = await image.metadata();
 
@@ -108,7 +109,7 @@ export async function analyzeImage(sharpInstance) {
     };
 
   } catch (error) {
-    console.error('Failed to analyze image stats:', error);
+    logger.error('Failed to analyze image stats:', error);
     return {
       lossyPreferred: true, // Default to true on error
       stats: {
